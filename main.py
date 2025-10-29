@@ -113,14 +113,15 @@ def main():
         logger.info("✓ Résumé sauvegardé localement")
         
         # 5. Envoi par email
-        logger.info("Étape 5/5 : Envoi par email...")
-        email_sender = EmailSender()
-        email_sender.send_summary(
-            summary=summary,
-            week_start=start_date,
-            week_end=end_date
-        )
-        logger.info("✓ Email envoyé avec succès")
+        if os.getenv('EMAIL_SEND'):
+            logger.info("Étape 5/5 : Envoi par email...")
+            email_sender = EmailSender()
+            email_sender.send_summary(
+                summary=summary,
+                week_start=start_date,
+                week_end=end_date
+            )
+            logger.info("✓ Email envoyé avec succès")
         
         logger.info("=" * 80)
         logger.info("Script terminé avec succès !")

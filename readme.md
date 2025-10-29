@@ -72,6 +72,7 @@ nano .env  # ou votre éditeur préféré
 3. Copiez le mot de passe généré (16 caractères)
 4. Configurez dans `.env` :
    ```
+   EMAIL_SEND=True
    EMAIL_FROM=votre.email@gmail.com
    EMAIL_TO=votre.email@gmail.com  # peut être le même
    SMTP_PASSWORD=votre_mot_de_passe_app

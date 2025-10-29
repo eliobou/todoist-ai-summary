@@ -132,6 +132,7 @@ cat .env | grep EMAIL
 
 Doit afficher :
 ```bash
+EMAIL_SEND=True
 EMAIL_FROM=votre.email@gmail.com
 EMAIL_TO=votre.email@gmail.com
 SMTP_SERVER=smtp.gmail.com

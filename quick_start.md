@@ -54,6 +54,7 @@ TINKER_PREFIX=Tinker
 OPENAI_API_KEY=votre_clé_openai
 
 # Email
+EMAIL_SEND=True
 EMAIL_FROM=votre.email@gmail.com
 EMAIL_TO=votre.email@gmail.com
 SMTP_PASSWORD=votre_mot_de_passe_app_gmail
