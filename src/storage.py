@@ -1,5 +1,5 @@
 """
-Gestionnaire de stockage local pour les résumés
+Local storage manager for summaries
 """
 
 import os
@@ -8,17 +8,18 @@ import logging
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Any
+from src.i18n import get_i18n
 
 logger = logging.getLogger(__name__)
 
-
 class StorageManager:
-    """Gère la sauvegarde et le chargement des résumés"""
+    """Manages saving and loading of summaries"""
     
     def __init__(self):
         self.data_dir = Path("data/summaries")
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Répertoire de stockage : {self.data_dir.absolute()}")
+        self.i18n = get_i18n()
+        logger.info(f"Storage directory: {self.data_dir.absolute()}")
     
     def save_summary(
         self,
@@ -28,21 +29,21 @@ class StorageManager:
         week_end: datetime.date
     ) -> None:
         """
-        Sauvegarde le résumé au format JSON et Markdown
+        Save the summary in JSON and Markdown format
         
         Args:
-            summary: Le résumé généré
-            organized_tasks: Les tâches organisées par catégorie et sous-projet
-            week_start: Date de début de semaine
-            week_end: Date de fin de semaine
+            summary: The generated summary
+            organized_tasks: Tasks organized by category and subproject
+            week_start: Week start date
+            week_end: Week end date
         """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         week_str = f"{week_start.strftime('%Y%m%d')}-{week_end.strftime('%Y%m%d')}"
         
-        # Calcul des statistiques
+        # Calculate statistics
         stats = self._calculate_stats(organized_tasks)
         
-        # Préparation des données
+        # Prepare data
         data = {
             'generated_at': datetime.now().isoformat(),
             'week_start': week_start.isoformat(),
@@ -52,13 +53,13 @@ class StorageManager:
             'stats': stats
         }
         
-        # Sauvegarde JSON
+        # Save JSON
         json_file = self.data_dir / f"summary_{week_str}_{timestamp}.json"
         with open(json_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-        logger.info(f"  Sauvegardé : {json_file.name}")
+        logger.info(f"  Saved: {json_file.name}")
         
-        # Sauvegarde Markdown (plus lisible)
+        # Save Markdown (more readable)
         md_file = self.data_dir / f"summary_{week_str}_{timestamp}.md"
         markdown_content = self._generate_markdown(
             summary=summary,
@@ -70,13 +71,13 @@ class StorageManager:
         
         with open(md_file, 'w', encoding='utf-8') as f:
             f.write(markdown_content)
-        logger.info(f"  Sauvegardé : {md_file.name}")
+        logger.info(f"  Saved: {md_file.name}")
     
     def _calculate_stats(
         self,
         organized_tasks: Dict[str, Dict[str, List[Dict[str, Any]]]]
     ) -> Dict[str, Any]:
-        """Calcule les statistiques des tâches"""
+        """Calculate task statistics"""
         stats = {
             'total_tasks': 0,
             'by_category': {},
@@ -107,37 +108,47 @@ class StorageManager:
         week_end: datetime.date,
         stats: Dict[str, Any]
     ) -> str:
-        """Génère le contenu Markdown du résumé"""
+        """Generate Markdown content of the summary"""
         
-        md = f"""# Résumé hebdomadaire - Semaine du {week_start.strftime('%d/%m/%Y')} au {week_end.strftime('%d/%m/%Y')}
+        # Format dates based on language
+        if self.i18n.language == 'fr':
+            start_str = week_start.strftime('%d/%m/%Y')
+            end_str = week_end.strftime('%d/%m/%Y')
+            date_str = datetime.now().strftime('%d/%m/%Y à %H:%M')
+        else:
+            start_str = week_start.strftime('%m/%d/%Y')
+            end_str = week_end.strftime('%m/%d/%Y')
+            date_str = datetime.now().strftime('%m/%d/%Y at %H:%M')
+        
+        md = f"""# {self.i18n.t('md_weekly_summary', start=start_str, end=end_str)}
 
-*Généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}*
+*{self.i18n.t('md_generated_on', date=date_str)}*
 
 ---
 
-## 📝 Résumé
+## {self.i18n.t('md_summary_title')}
 
 {summary}
 
 ---
 
-## 📊 Statistiques
+## {self.i18n.t('md_stats_title')}
 
-- **Total de tâches complétées** : {stats['total_tasks']}
+{self.i18n.t('md_total_tasks', count=stats['total_tasks'])}
 """
         
-        # Statistiques par catégorie
+        # Statistics by category
         for category, count in stats['by_category'].items():
-            md += f"- **{category}** : {count} tâches\n"
+            md += f"- **{category}**: {count} tasks\n"
             
-            # Sous-projets si disponibles
+            # Subprojects if available
             if category in stats['by_subproject'] and stats['by_subproject'][category]:
                 for subproject, subcount in stats['by_subproject'][category].items():
-                    md += f"  - {subproject}: {subcount} tâches\n"
+                    md += f"  - {subproject}: {subcount} tasks\n"
         
-        md += "\n---\n\n## 📋 Détail des tâches\n\n"
+        md += f"\n---\n\n## {self.i18n.t('md_tasks_detail')}\n\n"
         
-        # Liste des tâches par catégorie et sous-projet
+        # Task list by category and subproject
         for category, subprojects in organized_tasks.items():
             md += f"### {category}\n\n"
             
@@ -148,7 +159,12 @@ class StorageManager:
                 for task in tasks:
                     section = f" *({task['section_name']})*" if task.get('section_name') else ""
                     completed = datetime.fromisoformat(task['completed_at'].replace('Z', '+00:00'))
-                    date_str = completed.strftime('%d/%m à %H:%M')
+                    
+                    if self.i18n.language == 'fr':
+                        date_str = completed.strftime('%d/%m à %H:%M')
+                    else:
+                        date_str = completed.strftime('%m/%d at %I:%M %p')
+                    
                     md += f"- {task['content']}{section} - ✓ {date_str}\n"
                 
                 md += "\n"
@@ -157,21 +173,21 @@ class StorageManager:
     
     def load_previous_summaries(self, weeks: int = 4) -> List[Dict[str, Any]]:
         """
-        Charge les N derniers résumés pour fournir du contexte
+        Load the last N summaries to provide context
         
         Args:
-            weeks: Nombre de semaines à charger
+            weeks: Number of weeks to load
         
         Returns:
-            Liste des résumés triés du plus ancien au plus récent
+            List of summaries sorted from oldest to newest
         """
         json_files = sorted(self.data_dir.glob("summary_*.json"))
         
         if not json_files:
-            logger.info("  Aucun résumé précédent trouvé")
+            logger.info("  No previous summaries found")
             return []
         
-        # Chargement des N derniers fichiers
+        # Load last N files
         recent_files = json_files[-weeks:] if len(json_files) > weeks else json_files
         
         summaries = []
@@ -185,7 +201,7 @@ class StorageManager:
                         'summary': data['summary']
                     })
             except Exception as e:
-                logger.warning(f"  Impossible de charger {file_path.name}: {str(e)}")
+                logger.warning(f"  Unable to load {file_path.name}: {str(e)}")
         
-        logger.info(f"  {len(summaries)} résumés précédents chargés")
+        logger.info(f"  {len(summaries)} previous summaries loaded")
         return summaries

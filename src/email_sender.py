@@ -1,5 +1,5 @@
 """
-Gestionnaire d'envoi d'emails
+Email sender module
 """
 
 import os
@@ -8,12 +8,12 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
+from src.i18n import get_i18n
 
 logger = logging.getLogger(__name__)
 
-
 class EmailSender:
-    """Gère l'envoi des résumés par email"""
+    """Handles sending summaries via email"""
     
     def __init__(self):
         self.smtp_server = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
@@ -21,15 +21,16 @@ class EmailSender:
         self.email_from = os.getenv('EMAIL_FROM')
         self.email_to = os.getenv('EMAIL_TO')
         self.smtp_password = os.getenv('SMTP_PASSWORD')
+        self.i18n = get_i18n()
         
-        # Validation de la configuration
+        # Validate configuration
         if not all([self.email_from, self.email_to, self.smtp_password]):
             raise ValueError(
-                "Configuration email incomplète. Vérifiez EMAIL_FROM, "
-                "EMAIL_TO et SMTP_PASSWORD dans .env"
+                "Incomplete email configuration. Check EMAIL_FROM, "
+                "EMAIL_TO and SMTP_PASSWORD in .env"
             )
         
-        logger.info(f"Configuration email : {self.email_from} -> {self.email_to}")
+        logger.info(f"Email configuration: {self.email_from} -> {self.email_to}")
     
     def send_summary(
         self,
@@ -38,47 +39,55 @@ class EmailSender:
         week_end: datetime.date
     ) -> None:
         """
-        Envoie le résumé par email
+        Send the summary via email
         
         Args:
-            summary: Le résumé à envoyer
-            week_start: Date de début de semaine
-            week_end: Date de fin de semaine
+            summary: The summary to send
+            week_start: Week start date
+            week_end: Week end date
         """
-        subject = f"📊 Résumé hebdomadaire - Semaine du {week_start.strftime('%d/%m')} au {week_end.strftime('%d/%m/%Y')}"
+        # Format dates based on language
+        if self.i18n.language == 'fr':
+            start_str = week_start.strftime('%d/%m')
+            end_str = week_end.strftime('%d/%m/%Y')
+        else:
+            start_str = week_start.strftime('%m/%d')
+            end_str = week_end.strftime('%m/%d/%Y')
         
-        # Construction du message
+        subject = self.i18n.t('email_subject', start=start_str, end=end_str)
+        
+        # Build message
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
         msg['From'] = self.email_from
         msg['To'] = self.email_to
         msg['Date'] = datetime.now().strftime('%a, %d %b %Y %H:%M:%S %z')
         
-        # Version texte
+        # Text version
         text_body = self._format_text_body(summary, week_start, week_end)
         
-        # Version HTML (plus jolie)
+        # HTML version (prettier)
         html_body = self._format_html_body(summary, week_start, week_end)
         
-        # Attachement des deux versions
+        # Attach both versions
         part1 = MIMEText(text_body, 'plain', 'utf-8')
         part2 = MIMEText(html_body, 'html', 'utf-8')
         
         msg.attach(part1)
         msg.attach(part2)
         
-        # Envoi
+        # Send
         try:
-            logger.info(f"Connexion à {self.smtp_server}:{self.smtp_port}...")
+            logger.info(f"Connecting to {self.smtp_server}:{self.smtp_port}...")
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
                 server.starttls()
                 server.login(self.email_from, self.smtp_password)
                 server.send_message(msg)
             
-            logger.info(f"  Email envoyé avec succès à {self.email_to}")
+            logger.info(f"  Email sent successfully to {self.email_to}")
             
         except Exception as e:
-            logger.error(f"Erreur lors de l'envoi de l'email: {str(e)}")
+            logger.error(f"Error sending email: {str(e)}")
             raise
     
     def _format_text_body(
@@ -87,16 +96,26 @@ class EmailSender:
         week_start: datetime.date,
         week_end: datetime.date
     ) -> str:
-        """Formate le corps de l'email en texte brut"""
-        return f"""Bonjour,
+        """Format email body as plain text"""
+        # Format dates based on language
+        if self.i18n.language == 'fr':
+            start_str = week_start.strftime('%d/%m/%Y')
+            end_str = week_end.strftime('%d/%m/%Y')
+            date_str = datetime.now().strftime('%d/%m/%Y à %H:%M')
+        else:
+            start_str = week_start.strftime('%m/%d/%Y')
+            end_str = week_end.strftime('%m/%d/%Y')
+            date_str = datetime.now().strftime('%m/%d/%Y at %I:%M %p')
+        
+        return f"""{self.i18n.t('email_greeting')}
 
-Voici ton résumé hebdomadaire pour la semaine du {week_start.strftime('%d/%m/%Y')} au {week_end.strftime('%d/%m/%Y')}.
+{self.i18n.t('email_intro', start=start_str, end=end_str)}
 
 {summary}
 
 ---
-Ce résumé a été généré automatiquement par Todoist AI Summary.
-Généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}
+{self.i18n.t('email_footer')}
+{self.i18n.t('email_generated_at', date=date_str)}
 """
     
     def _format_html_body(
@@ -105,9 +124,23 @@ Généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}
         week_start: datetime.date,
         week_end: datetime.date
     ) -> str:
-        """Formate le corps de l'email en HTML"""
+        """Format email body as HTML"""
         
-        # Conversion des retours à la ligne en paragraphes HTML
+        # Format dates based on language
+        if self.i18n.language == 'fr':
+            start_str = week_start.strftime('%d/%m/%Y')
+            end_str = week_end.strftime('%d/%m/%Y')
+            date_str = datetime.now().strftime('%d/%m/%Y à %H:%M')
+            header_start = week_start.strftime('%d/%m')
+            header_end = end_str
+        else:
+            start_str = week_start.strftime('%m/%d/%Y')
+            end_str = week_end.strftime('%m/%d/%Y')
+            date_str = datetime.now().strftime('%m/%d/%Y at %I:%M %p')
+            header_start = week_start.strftime('%m/%d')
+            header_end = end_str
+        
+        # Convert line breaks to HTML paragraphs
         paragraphs = summary.split('\n\n')
         html_paragraphs = ''.join(f'<p>{p.replace(chr(10), "<br>")}</p>' for p in paragraphs if p.strip())
         
@@ -161,8 +194,8 @@ Généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}
 </head>
 <body>
     <div class="header">
-        <h1>📊 Résumé hebdomadaire</h1>
-        <p>Semaine du {week_start.strftime('%d/%m/%Y')} au {week_end.strftime('%d/%m/%Y')}</p>
+        <h1>{self.i18n.t('email_subject', start=header_start, end=header_end)}</h1>
+        <p>{self.i18n.t('email_intro', start=start_str, end=end_str)}</p>
     </div>
     
     <div class="content">
@@ -170,8 +203,8 @@ Généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}
     </div>
     
     <div class="footer">
-        <p>Ce résumé a été généré automatiquement par <strong>Todoist AI Summary</strong></p>
-        <p>Généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}</p>
+        <p>{self.i18n.t('email_footer')}</p>
+        <p>{self.i18n.t('email_generated_at', date=date_str)}</p>
     </div>
 </body>
 </html>

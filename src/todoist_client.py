@@ -1,5 +1,5 @@
 """
-Client pour interagir avec l'API Todoist
+Client for interacting with Todoist API
 """
 
 import os
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class TodoistClient:
-    """Client pour l'API Todoist avec retry automatique"""
+    """Client for Todoist API with automatic retry"""
     
     BASE_URL = "https://api.todoist.com/sync/v9"
     REST_URL = "https://api.todoist.com/rest/v2"
@@ -22,25 +22,28 @@ class TodoistClient:
     def __init__(self):
         self.api_token = os.getenv('TODOIST_API_TOKEN')
         if not self.api_token:
-            raise ValueError("TODOIST_API_TOKEN manquant dans .env")
+            raise ValueError("TODOIST_API_TOKEN missing in .env")
         
         self.headers = {
             "Authorization": f"Bearer {self.api_token}"
         }
         
-        # Configuration des préfixes de projets (facilement modifiable)
-        self.work_prefix = os.getenv('WORK_PREFIX', 'ECL')
-        self.personal_prefix = os.getenv('PERSONAL_PREFIX', 'Perso')
-        self.tinker_prefix = os.getenv('TINKER_PREFIX', 'Tinker')
+        # Project prefix configuration (easily modifiable)
+        self.work_prefix = os.getenv('WORK_PREFIX', None)
+        self.personal_prefix = os.getenv('PERSONAL_PREFIX', None)
+        self.tinker_prefix = os.getenv('TINKER_PREFIX', None)
+
+        if self.work_prefix is None or self.personal_prefix is None or self.tinker_prefix is None:
+            raise ValueError("Projects prefix not set")
         
-        # Session avec retry automatique
+        # Session with automatic retry
         self.session = self._create_session()
         
-        # Cache des projets
+        # Projects cache
         self._projects_cache = None
     
     def _create_session(self) -> requests.Session:
-        """Crée une session avec retry automatique"""
+        """Create a session with automatic retry"""
         session = requests.Session()
         retry_strategy = Retry(
             total=3,
@@ -52,11 +55,11 @@ class TodoistClient:
         return session
     
     def get_projects(self) -> List[Dict[str, Any]]:
-        """Récupère la liste des projets"""
+        """Fetch list of projects"""
         if self._projects_cache is not None:
             return self._projects_cache
         
-        logger.info("Récupération de la liste des projets...")
+        logger.info("Fetching project list...")
         response = self.session.get(
             f"{self.REST_URL}/projects",
             headers=self.headers
@@ -64,11 +67,11 @@ class TodoistClient:
         response.raise_for_status()
         
         self._projects_cache = response.json()
-        logger.info(f"  {len(self._projects_cache)} projets trouvés")
+        logger.info(f"  {len(self._projects_cache)} projects found")
         return self._projects_cache
     
     def get_sections(self, project_id: str) -> List[Dict[str, Any]]:
-        """Récupère les sections d'un projet"""
+        """Fetch sections of a project"""
         response = self.session.get(
             f"{self.REST_URL}/sections",
             headers=self.headers,
@@ -83,30 +86,30 @@ class TodoistClient:
         end_date: datetime.date
     ) -> List[Dict[str, Any]]:
         """
-        Récupère les tâches complétées entre deux dates
+        Fetch completed tasks between two dates
         
         Args:
-            start_date: Date de début (incluse)
-            end_date: Date de fin (incluse)
+            start_date: Start date (inclusive)
+            end_date: End date (inclusive)
         
         Returns:
-            Liste des tâches complétées avec leur projet et section
+            List of completed tasks with their project and section
         """
-        logger.info(f"Récupération des tâches du {start_date} au {end_date}...")
+        logger.info(f"Fetching tasks from {start_date} to {end_date}...")
         
-        # Récupération de tous les projets
+        # Fetch all projects
         projects = self.get_projects()
         projects_map = {p['id']: p for p in projects}
         
-        # Récupération des sections pour chaque projet
+        # Fetch sections for each project
         sections_map = {}
         for project in projects:
             sections = self.get_sections(project['id'])
             for section in sections:
                 sections_map[section['id']] = section
         
-        # Récupération des tâches complétées via l'API Sync
-        # On récupère depuis 8 jours pour être sûr de tout avoir
+        # Fetch completed tasks via Sync API
+        # Fetch from 8 days ago to ensure we get everything
         since = (start_date - timedelta(days=1)).isoformat()
         
         response = self.session.get(
@@ -117,19 +120,19 @@ class TodoistClient:
         response.raise_for_status()
         data = response.json()
         
-        # Filtrage des tâches dans la période voulue
+        # Filter tasks within the desired period
         completed_tasks = []
         for item in data.get('items', []):
             completed_at_str = item.get('completed_at')
             if not completed_at_str:
                 continue
             
-            # Parse de la date de complétion
+            # Parse completion date
             completed_at = datetime.fromisoformat(
                 completed_at_str.replace('Z', '+00:00')
             ).date()
             
-            # Vérification de la période
+            # Check period
             if start_date <= completed_at <= end_date:
                 task_data = {
                     'id': item.get('id'),
@@ -141,29 +144,29 @@ class TodoistClient:
                     'section_name': None
                 }
                 
-                # Ajout du nom du projet
+                # Add project name
                 if item.get('project_id') in projects_map:
                     task_data['project_name'] = projects_map[item['project_id']]['name']
                 
-                # Ajout du nom de la section
+                # Add section name
                 if item.get('section_id') and item['section_id'] in sections_map:
                     task_data['section_name'] = sections_map[item['section_id']]['name']
                 
                 completed_tasks.append(task_data)
         
-        logger.info(f"  {len(completed_tasks)} tâches dans la période")
+        logger.info(f"  {len(completed_tasks)} tasks in period")
         return completed_tasks
     
     def _parse_project_name(self, project_name: str) -> tuple[str, str]:
         """
-        Parse le nom d'un projet pour extraire le préfixe et le sous-projet
+        Parse project name to extract prefix and subproject
         
         Args:
-            project_name: Nom complet du projet (ex: "ECL/Vision")
+            project_name: Full project name (e.g., "Work/Project1")
         
         Returns:
-            Tuple (prefix, subproject) ex: ("ECL", "Vision")
-            Si pas de "/", retourne (project_name, None)
+            Tuple (prefix, subproject) e.g., ("Work", "Project1")
+            If no "/", returns (project_name, None)
         """
         if '/' in project_name:
             parts = project_name.split('/', 1)
@@ -175,21 +178,21 @@ class TodoistClient:
         tasks: List[Dict[str, Any]]
     ) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
         """
-        Organise les tâches par catégorie et sous-projet
+        Organize tasks by category and subproject
         
         Returns:
-            Dict avec structure:
+            Dict with structure:
             {
-                'ECL': {
-                    'Vision': [tasks...],
-                    'Scripting backup purge': [tasks...]
+                'Work': {
+                    'Project1': [tasks...],
+                    'Project2': [tasks...]
                 },
                 'Perso': {
-                    None: [tasks...]  # Si pas de sous-projet
+                    None: [tasks...]  # If no subproject
                 },
                 'Tinker': {
-                    'Horloge connectée': [tasks...],
-                    'Bot Discord': [tasks...]
+                    'Smart Clock': [tasks...],
+                    'Discord Bot': [tasks...]
                 }
             }
         """
@@ -200,19 +203,19 @@ class TodoistClient:
             if not project_name:
                 continue
             
-            # Parse du nom du projet
+            # Parse project name
             prefix, subproject = self._parse_project_name(project_name)
             
-            # Vérification que c'est un préfixe configuré
+            # Check if it's a configured prefix
             if prefix not in [self.work_prefix, self.personal_prefix, self.tinker_prefix]:
-                # Projet qui ne correspond à aucun préfixe configuré
+                # Project doesn't match any configured prefix
                 continue
             
-            # Initialisation de la structure si nécessaire
+            # Initialize structure if needed
             if prefix not in organized:
                 organized[prefix] = {}
             
-            # Clé pour le sous-projet (None si pas de sous-projet)
+            # Key for subproject (None if no subproject)
             subproject_key = subproject if subproject else None
             
             if subproject_key not in organized[prefix]:
@@ -220,12 +223,12 @@ class TodoistClient:
             
             organized[prefix][subproject_key].append(task)
         
-        # Log de l'organisation
+        # Log organization
         for prefix, subprojects in organized.items():
             total = sum(len(tasks) for tasks in subprojects.values())
-            logger.info(f"  - {prefix}: {total} tâches")
+            logger.info(f"  - {prefix}: {total} tasks")
             for subproject, tasks in subprojects.items():
                 if subproject:
-                    logger.info(f"    └─ {subproject}: {len(tasks)} tâches")
+                    logger.info(f"    └─ {subproject}: {len(tasks)} tasks")
         
         return organized

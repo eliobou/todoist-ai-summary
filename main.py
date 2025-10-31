@@ -1,6 +1,6 @@
 """
-Todoist AI Summary - Point d'entrée principal
-Génère un résumé hebdomadaire des tâches Todoist complétées
+Todoist AI Summary - Main entry point
+Generates weekly summaries of completed Todoist tasks
 """
 
 import sys
@@ -14,10 +14,11 @@ from src.todoist_client import TodoistClient
 from src.summarizer import WeeklySummarizer
 from src.storage import StorageManager
 from src.email_sender import EmailSender
+from src.i18n import get_i18n
 
-# Configuration des logs
+
 def setup_logging():
-    """Configure le système de logging"""
+    """Configure logging system"""
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
     
@@ -35,11 +36,11 @@ def setup_logging():
 
 
 def get_week_range():
-    """Retourne les dates de début et fin de la semaine écoulée (lundi-dimanche)"""
+    """Return start and end dates of past week (Monday-Sunday)"""
     today = datetime.now().date()
-    # Dimanche = 6, on veut revenir au lundi précédent
+    # Sunday = 6, we want to go back to previous Monday
     days_since_monday = (today.weekday() + 1) % 7
-    if days_since_monday == 0:  # Si on est dimanche
+    if days_since_monday == 0:  # If it's Sunday
         days_since_monday = 7
     
     start_date = today - timedelta(days=days_since_monday)
@@ -49,50 +50,55 @@ def get_week_range():
 
 
 def main():
-    """Fonction principale"""
-    # Chargement des variables d'environnement
+    """Main function"""
+    # Load environment variables
     load_dotenv()
     
-    # Setup du logging
+    # Setup logging
     logger = setup_logging()
+    
+    # Get i18n instance
+    i18n = get_i18n()
+    
     logger.info("=" * 80)
-    logger.info("Démarrage du script Todoist AI Summary")
+    logger.info(i18n.t('log_startup'))
     logger.info("=" * 80)
     
     try:
-        # Récupération des dates de la semaine
+        # Get week range
         start_date, end_date = get_week_range()
-        logger.info(f"Période analysée : {start_date} au {end_date}")
+        logger.info(i18n.t('log_period', start=start_date, end=end_date))
         
-        # 1. Récupération des tâches depuis Todoist
-        logger.info("Étape 1/5 : Connexion à Todoist...")
+        # 1. Fetch tasks from Todoist
+        logger.info(i18n.t('log_step', step=1, total=5, action=i18n.t('log_connecting_todoist')))
         todoist = TodoistClient()
         completed_tasks = todoist.get_completed_tasks(start_date, end_date)
-        logger.info(f"✓ {len(completed_tasks)} tâches complétées récupérées")
+        logger.info(f"✓ {i18n.t('log_tasks_found', count=len(completed_tasks))}")
         
         if not completed_tasks:
-            logger.warning("Aucune tâche complétée cette semaine. Arrêt du script.")
+            logger.warning(i18n.t('log_no_tasks'))
             return
         
-        # 2. Organisation des tâches par catégorie
-        logger.info("Étape 2/5 : Organisation des tâches...")
+        # 2. Organize tasks by category
+        logger.info(i18n.t('log_step', step=2, total=5, action=i18n.t('log_organizing_tasks')))
         organized_tasks = todoist.organize_tasks_by_category(completed_tasks)
         
-        for category, tasks in organized_tasks.items():
-            logger.info(f"  - {category}: {len(tasks)} tâches")
+        for category, subprojects in organized_tasks.items():
+            total = sum(len(tasks) for tasks in subprojects.values())
+            logger.info(f"  - {category}: {total} tasks")
         
-        # 3. Génération du résumé avec OpenAI
-        logger.info("Étape 3/5 : Génération du résumé IA...")
+        # 3. Generate summary with OpenAI
+        logger.info(i18n.t('log_step', step=3, total=5, action=i18n.t('log_generating_summary')))
         summarizer = WeeklySummarizer()
         
-        # Chargement du contexte des semaines précédentes
+        # Load context from previous weeks
         storage = StorageManager()
         previous_summaries = storage.load_previous_summaries(
             weeks=int(os.getenv('WEEKS_OF_CONTEXT', '4'))
         )
         
         if previous_summaries:
-            logger.info(f"  - Contexte chargé : {len(previous_summaries)} semaines précédentes")
+            logger.info(f"  - {i18n.t('log_context_loaded', count=len(previous_summaries))}")
         
         summary = summarizer.generate_summary(
             organized_tasks=organized_tasks,
@@ -100,35 +106,35 @@ def main():
             week_end=end_date,
             previous_summaries=previous_summaries
         )
-        logger.info("✓ Résumé généré avec succès")
+        logger.info(f"✓ {i18n.t('log_summary_generated')}")
         
-        # 4. Sauvegarde locale
-        logger.info("Étape 4/5 : Sauvegarde locale...")
+        # 4. Save locally
+        logger.info(i18n.t('log_step', step=4, total=5, action=i18n.t('log_saving_local')))
         storage.save_summary(
             summary=summary,
             organized_tasks=organized_tasks,
             week_start=start_date,
             week_end=end_date
         )
-        logger.info("✓ Résumé sauvegardé localement")
+        logger.info(f"✓ {i18n.t('log_summary_saved')}")
         
-        # 5. Envoi par email
-        if os.getenv('EMAIL_SEND'):
-            logger.info("Étape 5/5 : Envoi par email...")
+        # 5. Send email
+        if os.getenv('EMAIL_SEND', False):
+            logger.info(i18n.t('log_step', step=5, total=5, action=i18n.t('log_sending_email')))
             email_sender = EmailSender()
             email_sender.send_summary(
                 summary=summary,
                 week_start=start_date,
                 week_end=end_date
             )
-            logger.info("✓ Email envoyé avec succès")
-        
-        logger.info("=" * 80)
-        logger.info("Script terminé avec succès !")
-        logger.info("=" * 80)
+            logger.info(f"✓ {i18n.t('log_email_sent')}")
+            
+            logger.info("=" * 80)
+            logger.info(i18n.t('log_script_complete'))
+            logger.info("=" * 80)
         
     except Exception as e:
-        logger.error(f"❌ Erreur lors de l'exécution : {str(e)}", exc_info=True)
+        logger.error(f"❌ {i18n.t('log_error')}: {str(e)}", exc_info=True)
         sys.exit(1)
 
 

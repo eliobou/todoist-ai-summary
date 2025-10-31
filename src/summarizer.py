@@ -1,5 +1,5 @@
 """
-Générateur de résumés hebdomadaires avec OpenAI
+AI summary generator with OpenAI
 """
 
 import os
@@ -8,22 +8,24 @@ from typing import List, Dict, Any
 from datetime import datetime
 import openai
 from openai import OpenAI
+from src.i18n import get_i18n
 
 logger = logging.getLogger(__name__)
 
 
 class WeeklySummarizer:
-    """Génère des résumés hebdomadaires avec OpenAI"""
+    """Generates weekly summaries with OpenAI"""
     
     def __init__(self):
         api_key = os.getenv('OPENAI_API_KEY')
         if not api_key:
-            raise ValueError("OPENAI_API_KEY manquant dans .env")
+            raise ValueError("OPENAI_API_KEY missing in .env")
         
         self.client = OpenAI(api_key=api_key)
         self.model = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
+        self.i18n = get_i18n()
         
-        logger.info(f"Initialisation de OpenAI avec le modèle {self.model}")
+        logger.info(f"Initializing OpenAI with model {self.model}")
     
     def _build_prompt(
         self,
@@ -32,55 +34,57 @@ class WeeklySummarizer:
         week_end: datetime.date,
         previous_summaries: List[Dict[str, Any]]
     ) -> str:
-        """Construit le prompt pour OpenAI"""
+        """Build the prompt for OpenAI"""
         
-        # En-tête
-        prompt = f"""Tu es un assistant qui aide à rédiger des résumés hebdomadaires personnels.
-
-PÉRIODE : Semaine du {week_start.strftime('%d/%m/%Y')} au {week_end.strftime('%d/%m/%Y')}
-
-"""
+        # Format dates based on language
+        if self.i18n.language == 'fr':
+            start_str = week_start.strftime('%d/%m/%Y')
+            end_str = week_end.strftime('%d/%m/%Y')
+        else:
+            start_str = week_start.strftime('%m/%d/%Y')
+            end_str = week_end.strftime('%m/%d/%Y')
         
-        # Contexte des semaines précédentes (si disponible)
+        # Header
+        prompt = f"{self.i18n.t('prompt_system')}\n\n"
+        prompt += f"{self.i18n.t('prompt_period', start=start_str, end=end_str)}\n\n"
+        
+        # Context from previous weeks (if available)
         if previous_summaries:
-            prompt += "CONTEXTE (semaines précédentes) :\n"
-            for summary in previous_summaries[-4:]:  # Max 4 semaines
-                week_info = f"{summary['week_start']} au {summary['week_end']}"
-                prompt += f"\n--- Semaine du {week_info} ---\n"
+            prompt += f"{self.i18n.t('prompt_context')}\n"
+            for summary in previous_summaries[-4:]:  # Max 4 weeks
+                week_info = f"{summary['week_start']} to {summary['week_end']}"
+                prompt += f"\n--- Week of {week_info} ---\n"
                 prompt += summary['summary'] + "\n"
             prompt += "\n"
         
-        # Tâches complétées cette semaine
-        prompt += "TÂCHES COMPLÉTÉES CETTE SEMAINE :\n\n"
+        # Completed tasks this week
+        prompt += f"{self.i18n.t('prompt_tasks')}\n\n"
         
-        # Pour chaque catégorie (ECL, Perso, Tinker...)
+        # For each category (Work, Perso, Tinker...)
         for category, subprojects in organized_tasks.items():
             prompt += f"=== {category.upper()} ===\n"
             
-            # Pour chaque sous-projet
+            # For each subproject
             for subproject_name, tasks in subprojects.items():
                 if subproject_name:
-                    prompt += f"\n[Sous-projet: {subproject_name}]\n"
+                    prompt += f"\n{self.i18n.t('prompt_subproject', name=subproject_name)}\n"
                 
                 for task in tasks:
                     section = f" (section: {task['section_name']})" if task.get('section_name') else ""
                     prompt += f"- {task['content']}{section}\n"
                 
                 if not subproject_name:
-                    # Si pas de sous-projet, ajouter une ligne vide
+                    # If no subproject, add blank line
                     prompt += "\n"
             
             prompt += "\n"
         
-        # Instructions de génération
-        prompt += f"""
-INSTRUCTIONS :
-Rédige un résumé de ma semaine en te basant UNIQUEMENT sur les tâches complétées ci-dessus.
-
-FORMAT REQUIS (STRUCTURE MARKDOWN) :
-"""
+        # Generation instructions
+        prompt += f"\n{self.i18n.t('prompt_instructions')}:\n"
+        prompt += f"{self.i18n.t('prompt_instruction_text')}\n\n"
+        prompt += f"{self.i18n.t('prompt_format')}\n"
         
-        # Construction dynamique de la structure attendue
+        # Dynamically build expected structure
         for category in organized_tasks.keys():
             prompt += f"\n## {category}\n"
             
@@ -88,33 +92,21 @@ FORMAT REQUIS (STRUCTURE MARKDOWN) :
             has_subprojects = any(sp is not None for sp in subprojects.keys())
             
             if has_subprojects:
-                prompt += "\nPour chaque sous-projet ayant des tâches :\n"
+                prompt += "\nFor each subproject with tasks:\n"
                 for subproject_name in subprojects.keys():
                     if subproject_name:
                         prompt += f"### {subproject_name}\n"
-                        prompt += "[Paragraphe décrivant les tâches de ce sous-projet]\n\n"
+                        prompt += "[Paragraph describing tasks for this subproject]\n\n"
             else:
-                prompt += "[Paragraphe décrivant les tâches]\n\n"
+                prompt += "[Paragraph describing tasks]\n\n"
         
-        prompt += """
-STYLE :
-- Ton factuel et professionnel mais naturel
-- À la 1ère personne ("J'ai...", "Je me suis concentré sur...")
-- Pas de liste à puces, uniquement des paragraphes fluides en phrases complètes
-- NE PAS extrapoler d'émotions ou de ressentis (exemple : éviter "qui m'agaçait", "pas mal de temps", etc.)
-- Rester strictement factuel : décrire ce qui a été fait, pas comment je me suis senti
-- Si tu as le contexte des semaines précédentes, assure une continuité narrative naturelle
-- Utiliser EXACTEMENT les titres ## et ### comme indiqué ci-dessus
-
-IMPORTANT :
-- Utilise les titres Markdown (##) pour chaque catégorie principale
-- Utilise les sous-titres (###) UNIQUEMENT pour les sous-projets qui existent
-- Si une catégorie n'a pas de sous-projets (juste un nom de catégorie), écris directement le paragraphe sans sous-titre ###
-- Chaque sous-projet doit avoir son propre paragraphe distinct sous son titre ###
-- Commence directement par les titres Markdown, sans introduction
-
-Rédige maintenant le résumé en suivant EXACTEMENT cette structure :
-"""
+        prompt += f"\n{self.i18n.t('prompt_style')}\n"
+        prompt += f"{self.i18n.t('prompt_style_rules')}\n\n"
+        
+        prompt += f"{self.i18n.t('prompt_important')}\n"
+        prompt += f"{self.i18n.t('prompt_important_rules')}\n\n"
+        
+        prompt += f"{self.i18n.t('prompt_request')}\n"
         
         return prompt
     
@@ -126,21 +118,21 @@ Rédige maintenant le résumé en suivant EXACTEMENT cette structure :
         previous_summaries: List[Dict[str, Any]] = None
     ) -> str:
         """
-        Génère le résumé hebdomadaire
+        Generate the weekly summary
         
         Args:
-            organized_tasks: Tâches organisées par catégorie et sous-projet
-            week_start: Date de début de semaine
-            week_end: Date de fin de semaine
-            previous_summaries: Résumés des semaines précédentes pour contexte
+            organized_tasks: Tasks organized by category and subproject
+            week_start: Week start date
+            week_end: Week end date
+            previous_summaries: Previous weeks' summaries for context
         
         Returns:
-            Le résumé généré
+            The generated summary
         """
         if previous_summaries is None:
             previous_summaries = []
         
-        logger.info("Construction du prompt...")
+        logger.info("Building prompt...")
         prompt = self._build_prompt(
             organized_tasks=organized_tasks,
             week_start=week_start,
@@ -148,7 +140,7 @@ Rédige maintenant le résumé en suivant EXACTEMENT cette structure :
             previous_summaries=previous_summaries
         )
         
-        logger.info(f"Appel à l'API OpenAI (modèle: {self.model})...")
+        logger.info(f"Calling OpenAI API (model: {self.model})...")
         
         try:
             response = self.client.chat.completions.create(
@@ -156,33 +148,33 @@ Rédige maintenant le résumé en suivant EXACTEMENT cette structure :
                 messages=[
                     {
                         "role": "system",
-                        "content": "Tu es un assistant qui aide à rédiger des résumés hebdomadaires personnels de manière factuelle et structurée."
+                        "content": self.i18n.t('prompt_system')
                     },
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                temperature=0.5,  # Réduit pour plus de factualité
+                temperature=0.5,  # Reduced for more factuality
                 max_tokens=2000
             )
             
             summary = response.choices[0].message.content.strip()
             
-            # Logging des stats d'utilisation
+            # Log usage stats
             usage = response.usage
-            logger.info(f"  Tokens utilisés - Input: {usage.prompt_tokens}, "
+            logger.info(f"  Tokens used - Input: {usage.prompt_tokens}, "
                        f"Output: {usage.completion_tokens}, "
                        f"Total: {usage.total_tokens}")
             
-            # Estimation du coût (prix approximatifs pour gpt-4o-mini)
+            # Cost estimation (approximate prices for gpt-4o-mini)
             input_cost = usage.prompt_tokens * 0.00015 / 1000
             output_cost = usage.completion_tokens * 0.0006 / 1000
             total_cost = input_cost + output_cost
-            logger.info(f"  Coût estimé: ${total_cost:.6f}")
+            logger.info(f"  Estimated cost: ${total_cost:.6f}")
             
             return summary
             
         except Exception as e:
-            logger.error(f"Erreur lors de l'appel à OpenAI: {str(e)}")
+            logger.error(f"Error calling OpenAI: {str(e)}")
             raise

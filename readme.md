@@ -1,27 +1,27 @@
 # 📊 Todoist AI Summary
 
-Génère automatiquement un résumé hebdomadaire intelligent de vos tâches Todoist complétées, avec envoi par email.
+Automatically generates a smart weekly summary of your completed Todoist tasks and sends it to you via email.
 
-## ✨ Fonctionnalités
+## ✨ Features
 
-- 🤖 **Résumés IA** : Utilise GPT-4o-mini pour créer des résumés naturels et contextualisés
-- 📧 **Envoi automatique** : Reçoit le résumé par email chaque dimanche soir
-- 💾 **Historique** : Sauvegarde locale en JSON et Markdown
-- 🧠 **Contexte historique** : Le modèle connaît les 4 dernières semaines pour assurer une continuité
-- 📁 **Organisation flexible** : Séparation Travail / Personnel / Projets Tinker
-- 💰 **Économique** : ~0.3 centimes par résumé avec GPT-4o-mini
+- 🤖 **AI Summaries**: Uses GPT-4o-mini to create natural, contextualized summaries
+- 📧 **Automatic delivery**: Receive the summary by email every Sunday evening
+- 💾 **History**: Local backup in JSON and Markdown
+- 🧠 **Historical context**: The model knows the last 4 weeks to ensure continuity
+- 📁 **Flexible organization**: Separation of Work / Personal / Tinker Projects
+- 💰 **Economical**: ~0.3 cents per summary with GPT-4o-mini
+- 🌍 **Multilingual**: Multiples language supported, easy to add more 
 
-## 📋 Prérequis
+## 📋 Prerequisites
 
 - Python 3.8+
-- Un compte Todoist (gratuit ou payant)
-- Une clé API OpenAI avec des crédits
-- Un compte Gmail (pour l'envoi d'emails)
-- Un Raspberry Pi ou serveur Linux avec cron
+- A Todoist account (free or paid)
+- An OpenAI API key with credits
+- A Gmail account (for sending emails)
 
 ## 🚀 Installation
 
-### 1. Cloner le projet
+### 1. Clone the project
 
 ```bash
 cd ~
@@ -29,302 +29,214 @@ git clone https://github.com/votre-username/todoist-ai-summary.git
 cd todoist-ai-summary
 ```
 
-### 2. Créer l'environnement virtuel
+### 2. Execute the setupt script
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate  # Sur Windows: venv\Scripts\activate
+chmod +x setup_script.sh
+./setup_script.sh
 ```
 
-### 3. Installer les dépendances
+The script will :
+1. Check if Python3 is installed
+2. Create a virtual environment and activate
+3. Install dependencies
+4. Create folder structure and required files
+5. Setup environment variables
+6. Test the installation
+7. Display next steps
 
-```bash
-pip install -r requirements.txt
+### 3. Configuration
+
+#### a) Set language
+1. Choose language of your tasks within supported languages.
+
+#### b) Get your Todoist token
+
+1. Go to https://todoist.com/app/settings/integrations/developer
+2. Copy your “API token”
+3. Paste it into `.env`: `TODOIST_API_TOKEN=your_token`
+
+#### c) Get your OpenAI key
+
+1. Go to https://platform.openai.com/api-keys
+2. Create a new API key
+3. Paste it into `.env`: `OPENAI_API_KEY=your_key`
+
+#### d) Configure Gmail
+
+**IMPORTANT**: Do NOT use your main Gmail password!
+
+1. Go to https://myaccount.google.com/apppasswords
+2. Create an application password named “Todoist Summary”
+3. Copy the generated password (16 characters)
+4. Configure in `.env`:
+```
+EMAIL_SEND=True
+EMAIL_FROM=votre.email@gmail.com
+EMAIL_TO=votre.email@gmail.com  # can be the same
+SMTP_PASSWORD=your_app_password
 ```
 
-### 4. Configuration
+#### e) Configure project prefixes
 
-#### a) Créer le fichier .env
-
+In `.env`, verify that the prefixes match your Todoist projects:
 ```bash
-cp .env.example .env
-nano .env  # ou votre éditeur préféré
+WORK_PREFIX=Work        # Detects “Work/Project1,” “Work/Project2,” etc.
+PERSONAL_PREFIX=Perso   # Detects “Perso,” “Perso/Home,” etc.
+TINKER_PREFIX=Tinker    # Detects “Tinker/Project1,” etc.
 ```
 
-#### b) Obtenir votre token Todoist
+**Important**: Prefixes are case-sensitive and must match the beginning of your Todoist project names **exactly**.
 
-1. Allez sur https://todoist.com/app/settings/integrations/developer
-2. Copiez votre "API token"
-3. Collez-le dans `.env` : `TODOIST_API_TOKEN=votre_token`
+## 🧪 Manual test
 
-#### c) Obtenir votre clé OpenAI
+Before configuring cron, test the script manually:
 
-1. Allez sur https://platform.openai.com/api-keys
-2. Créez une nouvelle clé API
-3. Collez-la dans `.env` : `OPENAI_API_KEY=votre_clé`
-
-#### d) Configurer Gmail
-
-**IMPORTANT** : N'utilisez PAS votre mot de passe Gmail principal !
-
-1. Allez sur https://myaccount.google.com/apppasswords
-2. Créez un mot de passe d'application nommé "Todoist Summary"
-3. Copiez le mot de passe généré (16 caractères)
-4. Configurez dans `.env` :
-   ```
-   EMAIL_SEND=True
-   EMAIL_FROM=votre.email@gmail.com
-   EMAIL_TO=votre.email@gmail.com  # peut être le même
-   SMTP_PASSWORD=votre_mot_de_passe_app
-   ```
-
-#### e) Configurer les préfixes de projets
-
-Dans `.env`, vérifiez que les préfixes correspondent à vos projets Todoist :
 ```bash
-WORK_PREFIX=ECL           # Détecte "ECL/Vision", "ECL/Infrastructure", etc.
-PERSONAL_PREFIX=Perso     # Détecte "Perso", "Perso/Maison", etc.
-TINKER_PREFIX=Tinker      # Détecte "Tinker/Bot Discord", etc.
+source venv-summary/bin/activate python main.py
 ```
 
-**Important** : Les préfixes sont sensibles à la casse et doivent correspondre **exactement** au début de vos noms de projets Todoist.
+Check:
+- ✅ The logs in `logs/`
+- ✅ The files in `data/summaries/`
+- ✅ The email received
 
-### 5. Créer la structure des dossiers
+## ⏰ Configuration of cron (Raspberry Pi)
 
-```bash
-mkdir -p data/summaries logs src
-```
+### 1. Open crontab
 
-### 6. Créer les fichiers Python
-
-Créez les fichiers suivants dans le dossier `src/` :
-- `__init__.py` (fichier vide)
-- `todoist_client.py`
-- `summarizer.py`
-- `storage.py`
-- `email_sender.py`
-
-Copiez le code des artifacts correspondants.
-
-## 🧪 Test manuel
-
-Avant de configurer cron, testez le script manuellement :
-
-```bash
-source venv/bin/activate
-python main.py
-```
-
-Vérifiez :
-- ✅ Les logs dans `logs/`
-- ✅ Les fichiers dans `data/summaries/`
-- ✅ L'email reçu
-
-## ⏰ Configuration de cron (Raspberry Pi)
-
-### 1. Ouvrir crontab
-
-```bash
+```bash 
 crontab -e
 ```
 
-### 2. Ajouter la ligne suivante
+### 2. Add the following line
 
-Exécution tous les dimanches à 21h00 :
+Execution every Sunday at 9:00 PM:
 
 ```bash
-0 21 * * 0 /home/pi/todoist-ai-summary/venv/bin/python /home/pi/todoist-ai-summary/main.py >> /home/pi/todoist-ai-summary/logs/cron.log 2>&1
+0 21 * * 0 /home/pi/todoist-ai-summary/venv-summary/bin/python /home/pi todoist-ai-summary/main.py> > /home/pi/todoist-ai-summary/logs/cron.log 2>&1 
 ```
 
-**Adaptation** : Remplacez `/home/pi/` par votre chemin réel.
+**Adaptation**: Replace `/home/pi/` with your actual path.
 
-### 3. Vérifier que cron fonctionne
+### 3. Check that cron works
 
-```bash
-# Vérifier que cron est actif
+```bash 
+# Check that cron is active
 sudo systemctl status cron
 
-# Voir les exécutions de cron
+# Check the executions of cron
 grep CRON /var/log/syslog
 ```
 
-## 📁 Organisation Todoist recommandée
+## 📁 Todoist Organization recommended
 
-### Structure des projets
+### Project structure
 
 ```
-📁 ECL                    (Projet travail)
+📁 Work                   (Work project)
   └── Sections : Backend, Frontend, Réunions, Admin
 
-📁 Perso                  (Projet personnel)
-  └── Sections : Maison, Courses, Santé
+📁 Perso                  (Personnal project)
+  └── Sections : Home, Groceries, Health
 
-📁 Tinker                 (Projets techniques)
-  └── Sections : Horloge connectée, Bot Discord, Scraper web
+📁 Tinker                 (Side projects)
+  └── Sections : Smart Clock, Discord Bot
 ```
 
-### Format du résumé généré
+### Format of the generated summary
 
-Le script génère un résumé structuré avec des **titres Markdown** :
+The script generates a structured summary with **Markdown titles** :
 
-- **Titre `##`** pour chaque catégorie principale (ECL, Perso, Tinker)
-- **Titre `###`** pour chaque sous-projet (Vision, Bot Discord, etc.)
-- **Paragraphes factuels** décrivant les tâches complétées
+- **Title `##`** for each main category (Work, Perso, Tinker)
+- **Title `##`** for each sub-project (Smart clock, Discord Bot, etc.)
+- **Factual paragraphs** describing the tasks completed
 
-**Exemple de résumé** :
+**Summary example** :
 
 ```markdown
-## ECL
+## Work
 
-### Vision
+### Machine learning
 
-J'ai travaillé sur l'amélioration du modèle de machine learning pour 
-la partie localisation. J'ai optimisé les paramètres et effectué 
-plusieurs tests de validation.
+I worked on improving the machine learning model for the core part. I optimized the settings and performed several validation tests.
 
-### Scripting backup purge
+### Scripting
 
-J'ai automatisé la purge des anciens backups avec un script Python. 
-Le script a été déployé en production.
+I automated the purge of old backups with a Python script.
+The script has been deployed in production.
 
-## Perso
+## Personal
 
-J'ai pris rendez-vous chez le dentiste. J'ai réparé la fuite sous 
-l'évier et fait les courses hebdomadaires.
+I made an appointment with the dentist. I fixed the leak under the sink and did the weekly shopping.
 
 ## Tinker
 
-### Horloge connectée
+### Smart clock
 
-J'ai câblé les LEDs et commencé l'intégration avec l'ESP32. Le 
-prototype affiche maintenant l'heure via WiFi.
+I wired the LEDs and started integration with the ESP32. The prototype now displays the time via WiFi.
 
-### Bot Discord
+### Discord Bot
 
-J'ai ajouté une commande de modération automatique et corrigé un bug 
-dans le système de permissions.
+I added an automatic moderation command and fixed a bug in the permissions system.
 ```
 
-## 💰 Estimation des coûts
+## 💰 Cost estimate
 
-Avec **GPT-4o-mini** (recommandé) :
-- Coût par résumé : ~$0.003 (0.3 centimes)
-- Coût mensuel : ~$0.012 (4 exécutions)
-- **Coût annuel : ~$0.15** ✅
+With **GPT-4o-mini** (recommended):
+- Cost per summary: ~$0.003 (0.3 cents)
+- Monthly cost: ~$0.012 (4 runs)
+- **Annual cost: ~$0.15** ✅
 
-Avec GPT-4 (non recommandé pour ce cas) :
-- Coût annuel : ~$2-3
+With GPT-4 (not recommended for this case):
+- Annual cost: ~$2-3
 
-## 🔧 Personnalisation
+## 🔧 Customization
 
-### Changer le jour d'exécution
+See the **customization** section in the Wiki of this repo
 
-Dans cron, le format est : `minute heure jour mois jour_semaine`
-- Dimanche = 0
-- Lundi = 1
-- etc.
-
-Exemples :
-```bash
-# Tous les vendredis à 18h00
-0 18 * * 5 /chemin/vers/script
-
-# Tous les 1er du mois à 9h00
-0 9 1 * * /chemin/vers/script
-```
-
-### Changer le ton du résumé
-
-Le ton par défaut est **factuel et professionnel**. Si vous voulez le modifier, éditez `src/summarizer.py` dans la méthode `_build_prompt()`.
-
-Exemples de modifications possibles :
-- Plus technique avec jargon métier
-- Plus décontracté avec humour
-- Plus formel et corporate
-
-### Changer le nombre de semaines de contexte
-
-Dans `.env` : `WEEKS_OF_CONTEXT=4` (1-8 recommandé)
-
-### Désactiver l'envoi d'email temporairement
-
-Commentez l'étape 5 dans `main.py` :
-
-```python
-# email_sender.send_summary(...)
-```
-
-## 📊 Structure du projet
+## 📊 Project Structure
 
 ```
 todoist-ai-summary/
-├── .env                    # Configuration (NE PAS COMMIT)
-├── .env.example            # Template de configuration
+├── .env                    # Configuration (DON'T COMMIT)
+├── .env.example            # Configuration template
 ├── .gitignore
 ├── README.md
 ├── requirements.txt
-├── main.py                 # Point d'entrée
+├── main.py                 # Entry point
 ├── src/
 │   ├── __init__.py
-│   ├── todoist_client.py   # Client API Todoist
-│   ├── summarizer.py       # Génération résumés OpenAI
-│   ├── storage.py          # Sauvegarde locale
-│   └── email_sender.py     # Envoi emails
+│   ├── todoist_client.py   # API Todoist client
+│   ├── summarizer.py       # Generate OpenAI summary
+│   ├── storage.py          # Local save
+│   └── email_sender.py     # Emails send
 ├── data/
-│   └── summaries/          # Résumés JSON + Markdown
-└── logs/                   # Logs d'exécution
+│   └── summaries/          # JSON + Markdown summaries
+└── logs/                   # Execution logs
 ```
 
-## 🐛 Dépannage
+## 🔧 Troubleshooting
 
-### Erreur "TODOIST_API_TOKEN manquant"
-- Vérifiez que le fichier `.env` existe
-- Vérifiez que le token est bien copié sans espaces
+See Wiki for troubleshooting documentation.
 
-### Erreur d'envoi d'email
-- Vérifiez que vous utilisez un **mot de passe d'application** Gmail
-- Vérifiez que l'authentification à 2 facteurs est activée sur Gmail
-- Testez la connexion SMTP manuellement
+## 🔮 Future improvements
 
-### Aucune tâche récupérée
-- Vérifiez que vos projets ont les bons noms (ECL, Perso, Tinker)
-- Vérifiez que vous avez complété des tâches cette semaine
-- Testez avec `python main.py` en mode debug
-
-### Cron ne s'exécute pas
-```bash
-# Vérifier les logs
-tail -f /home/pi/todoist-ai-summary/logs/cron.log
-
-# Vérifier cron
-sudo systemctl status cron
-
-# Tester manuellement la commande cron
-/home/pi/todoist-ai-summary/venv/bin/python /home/pi/todoist-ai-summary/main.py
-```
-
-## 🔮 Futures améliorations
-
-- [ ] Intégration Google Docs (API)
-- [ ] Support Apple Notes via automation
-- [ ] Dashboard web pour consulter l'historique
-- [ ] Graphiques de productivité
-- [ ] Comparaison semaine N vs N-1
-- [ ] Export PDF
-- [ ] Notifications Telegram/Slack
+- [ ] Google Docs Integration (API)
+- [ ] Apple Notes support via automation
+- [ ] More languages supported (PRs are welcome)
+- [ ] Telegram/Slack/Teams notifications
+- [ ] Web dashboard to consult the history
+- [ ] Productivity Charts
+- [ ] Comparison week N vs N-1
+- [ ] PDF Export
 
 ## 📝 Licence
 
-MIT
+GNU GPLv3
 
 ## 🤝 Contribution
 
-Les issues et pull requests sont les bienvenues !
+Issues and pull requests are welcome!
 
-## 👤 Auteur
-
-Créé pour gérer efficacement vos tâches Todoist avec l'aide de l'IA.
-
----
-
-**Bon résumé ! 🚀**
+**Good summary! 🚀**
