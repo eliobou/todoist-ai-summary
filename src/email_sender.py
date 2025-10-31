@@ -12,6 +12,7 @@ from src.i18n import get_i18n
 
 logger = logging.getLogger(__name__)
 
+
 class EmailSender:
     """Handles sending summaries via email"""
     
@@ -31,6 +32,55 @@ class EmailSender:
             )
         
         logger.info(f"Email configuration: {self.email_from} -> {self.email_to}")
+    
+    def _markdown_to_html(self, markdown_text: str) -> str:
+        """
+        Convert Markdown to HTML (simple conversion for email)
+        Handles: ##, ###, paragraphs, line breaks
+        """
+        html = ""
+        lines = markdown_text.split('\n')
+        in_paragraph = False
+        current_paragraph = []
+        
+        for line in lines:
+            stripped = line.strip()
+            
+            # H2 heading (##)
+            if stripped.startswith('## ') and not stripped.startswith('### '):
+                if in_paragraph:
+                    html += f"<p>{'<br>'.join(current_paragraph)}</p>\n"
+                    current_paragraph = []
+                    in_paragraph = False
+                heading_text = stripped[3:].strip()
+                html += f'<h2 style="color: #667eea; margin-top: 25px; margin-bottom: 15px; font-size: 20px;">{heading_text}</h2>\n'
+            
+            # H3 heading (###)
+            elif stripped.startswith('### '):
+                if in_paragraph:
+                    html += f"<p>{'<br>'.join(current_paragraph)}</p>\n"
+                    current_paragraph = []
+                    in_paragraph = False
+                heading_text = stripped[4:].strip()
+                html += f'<h3 style="color: #764ba2; margin-top: 20px; margin-bottom: 10px; font-size: 18px;">{heading_text}</h3>\n'
+            
+            # Empty line = end of paragraph
+            elif not stripped:
+                if in_paragraph:
+                    html += f"<p>{'<br>'.join(current_paragraph)}</p>\n"
+                    current_paragraph = []
+                    in_paragraph = False
+            
+            # Regular text line
+            else:
+                in_paragraph = True
+                current_paragraph.append(stripped)
+        
+        # Close last paragraph if any
+        if in_paragraph:
+            html += f"<p>{'<br>'.join(current_paragraph)}</p>\n"
+        
+        return html
     
     def send_summary(
         self,
@@ -140,9 +190,8 @@ class EmailSender:
             header_start = week_start.strftime('%m/%d')
             header_end = end_str
         
-        # Convert line breaks to HTML paragraphs
-        paragraphs = summary.split('\n\n')
-        html_paragraphs = ''.join(f'<p>{p.replace(chr(10), "<br>")}</p>' for p in paragraphs if p.strip())
+        # Convert Markdown to HTML
+        html_content = self._markdown_to_html(summary)
         
         return f"""
 <!DOCTYPE html>
@@ -199,7 +248,7 @@ class EmailSender:
     </div>
     
     <div class="content">
-        {html_paragraphs}
+        {html_content}
     </div>
     
     <div class="footer">
