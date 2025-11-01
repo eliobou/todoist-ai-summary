@@ -162,10 +162,10 @@ class TodoistClient:
         Parse project name to extract prefix and subproject
         
         Args:
-            project_name: Full project name (e.g., "Work/Project1")
+            project_name: Full project name (e.g., "ECL/Vision")
         
         Returns:
-            Tuple (prefix, subproject) e.g., ("Work", "Project1")
+            Tuple (prefix, subproject) e.g., ("ECL", "Vision")
             If no "/", returns (project_name, None)
         """
         if '/' in project_name:
@@ -178,20 +178,21 @@ class TodoistClient:
         tasks: List[Dict[str, Any]]
     ) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
         """
-        Organize tasks by category and subproject
+        Organize tasks by category and subproject/section
         
         Returns:
             Dict with structure:
             {
-                'Work': {
-                    'Project1': [tasks...],
-                    'Project2': [tasks...]
+                'ECL': {
+                    'Vision': [tasks...],
+                    'Scripting backup purge': [tasks...]
                 },
                 'Perso': {
-                    None: [tasks...]  # If no subproject
+                    'Maison': [tasks...],  # Section used as subproject
+                    'Admin': [tasks...]
                 },
                 'Tinker': {
-                    'Smart Clock': [tasks...],
+                    'Connected Clock': [tasks...],
                     'Discord Bot': [tasks...]
                 }
             }
@@ -215,13 +216,21 @@ class TodoistClient:
             if prefix not in organized:
                 organized[prefix] = {}
             
-            # Key for subproject (None if no subproject)
-            subproject_key = subproject if subproject else None
+            # Determine the key for grouping:
+            # 1. If there's a subproject (after /), use it
+            # 2. Otherwise, use the section name
+            # 3. If neither, use None
+            if subproject:
+                grouping_key = subproject
+            elif task.get('section_name'):
+                grouping_key = task['section_name']
+            else:
+                grouping_key = None
             
-            if subproject_key not in organized[prefix]:
-                organized[prefix][subproject_key] = []
+            if grouping_key not in organized[prefix]:
+                organized[prefix][grouping_key] = []
             
-            organized[prefix][subproject_key].append(task)
+            organized[prefix][grouping_key].append(task)
         
         # Log organization
         for prefix, subprojects in organized.items():
