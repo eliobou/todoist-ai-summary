@@ -1,0 +1,33 @@
+name: Security Checks
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Check for secrets in code
+      run: |
+        # Check if .env file is accidentally committed
+        if [ -f .env ]; then
+          echo "ERROR: .env file found in repository!"
+          exit 1
+        fi
+        
+        # Check for common secret patterns
+        if grep -r "sk-[a-zA-Z0-9]\{20,\}" .; then
+          echo "ERROR: Potential OpenAI API key found!"
+          exit 1
+        fi
+    
+    - name: Check Python syntax
+      run: |
+        python3 -m py_compile main.py
+        python3 -m py_compile src/*.py
