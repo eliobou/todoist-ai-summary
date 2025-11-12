@@ -33,8 +33,8 @@ class TodoistClient:
         self.personal_prefix = os.getenv('PERSONAL_PREFIX', None)
         self.tinker_prefix = os.getenv('TINKER_PREFIX', None)
 
-        if self.work_prefix is None or self.personal_prefix is None or self.tinker_prefix is None:
-            raise ValueError("Projects prefix not set")
+        if self.work_prefix is None and self.personal_prefix is None and self.tinker_prefix is None:
+            raise ValueError("No projects prefix set")
         
         # Session with automatic retry
         self.session = self._create_session()
@@ -183,7 +183,7 @@ class TodoistClient:
         Returns:
             Dict with structure:
             {
-                'ECL': {
+                'Work': {
                     'Vision': [tasks...],
                     'Scripting backup purge': [tasks...]
                 },
@@ -208,7 +208,9 @@ class TodoistClient:
             prefix, subproject = self._parse_project_name(project_name)
             
             # Check if it's a configured prefix
-            if prefix not in [self.work_prefix, self.personal_prefix, self.tinker_prefix]:
+            configured_prefixes = [p for p in [self.work_prefix, self.personal_prefix, self.tinker_prefix] if p is not None]
+
+            if prefix not in configured_prefixes:
                 # Project doesn't match any configured prefix
                 continue
             
