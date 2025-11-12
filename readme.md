@@ -114,7 +114,7 @@ crontab -e
 Execution every Sunday at 9:00 PM:
 
 ```bash
-0 21 * * 0 /home/pi/todoist-ai-summary/venv-summary/bin/python /home/pi todoist-ai-summary/main.py> > /home/pi/todoist-ai-summary/logs/cron.log 2>&1 
+0 21 * * 0 /home/pi/todoist-ai-summary/venv-summary/bin/python /home/pi/todoist-ai-summary/main.py >> /home/pi/todoist-ai-summary/logs/cron.log 2>&1
 ```
 
 **Adaptation**: Replace `/home/pi/` with your actual path.
